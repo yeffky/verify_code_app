@@ -1,11 +1,8 @@
-/*
- * @Author: yeffky
- * @Date: 2025-02-21 16:07:31
- * @LastEditTime: 2025-02-26 18:51:12
- */
+import 'dart:async';
 import 'dart:io';
-
+import 'dart:isolate';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'sms_handler.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -36,38 +33,138 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final _apiEndpointController = TextEditingController(
-    text: 'http://XXX.XXX.XXX.XXX:5628/captcha',
+    text: 'http://xxx.xxx.xxx.xxx:5628/captcha',
   );
   final _targetAppController = TextEditingController(text: '小红书');
   final _phoneNumberController = TextEditingController(text: '1234567890');
-  late SMSHandler _smsHandler;
+  late ReceivePort _receivePort;
+  Isolate? _isolate;
+  SendPort? _isolateSendPort;
+  String buttonText = '开始监控';
+  String stopButtonText = '停止监控';
+  String? response;
+  bool isMonitoring = false;
+  RootIsolateToken? _rootIsolateToken;
 
   @override
   void initState() {
     super.initState();
-    _initializeSMSHandler();
+    _rootIsolateToken = RootIsolateToken.instance;
+    _initReceivePort();
   }
 
-  Future<String?> _initializeSMSHandler() async {
-    final apiEndpoint = _apiEndpointController.text;
-    final targetApp = _targetAppController.text;
-    final phoneNumber = _phoneNumberController.text;
-    if (apiEndpoint.isNotEmpty) {
-      _smsHandler = SMSHandler(apiEndpoint, targetApp, phoneNumber);
-      String? result1 = await _smsHandler.initSMSListener();
-      return result1;
-    }
-    return null;
-  }
-
-  String buttonText = '开始监控';
-  String? result;
-  String? response;
-
-  void changeButtonText(String? text) {
-    setState(() {
-      buttonText = text ?? '开始监控';
+  void _initReceivePort() {
+    _receivePort = ReceivePort();
+    _receivePort.listen((message) {
+      if (message is String) {
+        setState(() => response = message);
+      } else if (message is SendPort) {
+        _isolateSendPort = message;
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _stopIsolate();
+    _receivePort.close();
+    super.dispose();
+  }
+
+  void _stopIsolate() {
+    if (_isolate != null) {
+      _isolateSendPort?.send('stop');
+      _isolate?.kill(priority: Isolate.immediate);
+      _isolate = null;
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    final status = await Permission.sms.request();
+    if (!status.isGranted) {
+      throw Exception('SMS permission denied');
+    }
+  }
+
+  Future<void> startMonitoring() async {
+    if (isMonitoring) return;
+
+    try {
+      await _checkPermissions();
+      _stopIsolate(); // Stop existing isolate if any
+
+      setState(() {
+        buttonText = "监控中...";
+        isMonitoring = true;
+      });
+
+      _isolate = await Isolate.spawn(
+        _monitorSmsInBackground,
+        [
+          _apiEndpointController.text,
+          _targetAppController.text,
+          _phoneNumberController.text,
+          _receivePort.sendPort,
+          _rootIsolateToken,
+        ],
+      );
+    } catch (e) {
+      setState(() => response = 'Error: ${e.toString()}');
+      _handleMonitoringStop();
+    }
+  }
+
+  void stopMonitoring() {
+    _stopIsolate();
+    _handleMonitoringStop();
+  }
+
+  void _handleMonitoringStop() {
+    if (mounted) {
+      setState(() {
+        buttonText = '开始监控';
+        response = null;
+        isMonitoring = false;
+      });
+    }
+  }
+
+  static void _monitorSmsInBackground(List<dynamic> args) async {
+    final rootIsolateToken = args[4] as RootIsolateToken;
+    BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
+
+    final apiEndpoint = args[0] as String;
+    final targetApp = args[1] as String;
+    final phoneNumber = args[2] as String;
+    final mainSendPort = args[3] as SendPort;
+    final smsHandler = SMSHandler(apiEndpoint, targetApp, phoneNumber);
+
+    final controlPort = ReceivePort();
+    mainSendPort.send(controlPort.sendPort);
+
+    final stopCompleter = Completer<void>();
+    controlPort.listen((message) {
+      if (message == 'stop') {
+        stopCompleter.complete();
+      }
+    });
+
+    try {
+      while (!stopCompleter.isCompleted) {
+        final value = await smsHandler.initSMSListener().timeout(
+          const Duration(seconds: 1),
+          onTimeout: () => null,
+        );
+
+        if (value != null) {
+          mainSendPort.send(value);
+        }
+
+        if (stopCompleter.isCompleted) break;
+      }
+    } finally {
+      controlPort.close();
+    }
   }
 
   @override
@@ -82,8 +179,7 @@ class _MyHomePageState extends State<MyHomePage> {
               controller: _apiEndpointController,
               decoration: const InputDecoration(
                 labelText: 'API Endpoint',
-                hintText:
-                    'Enter your API endpoint URL (e.g., "http://example.com/captcha")',
+                hintText: 'Enter your API endpoint URL',
               ),
             ),
             const SizedBox(height: 16),
@@ -99,34 +195,28 @@ class _MyHomePageState extends State<MyHomePage> {
               controller: _targetAppController,
               decoration: const InputDecoration(
                 labelText: 'Target App',
-                hintText: 'Enter the app name to monitor (e.g., "小红书")',
+                hintText: 'Enter the app name to monitor',
               ),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () async {
-                if (await Permission.sms.request().isGranted) {
-                  // 权限已授予，执行 SMS 查询
-                  changeButtonText("监控中...");
-
-                  while (result == null) {
-                    result = await _initializeSMSHandler();
-                    if (result != null) {
-                      changeButtonText("监控完成");
-                      break;
-                    }
-                    sleep(Duration(seconds: 5)); // 每隔5秒检查一次
-                  }
-                  print(result);
-                  changeButtonText('开始监控');
-                  response = result;
-                  result = null;
-                }
-              },
-              child: Text(buttonText),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  onPressed: isMonitoring ? null : startMonitoring,
+                  child: Text(buttonText),
+                ),
+                ElevatedButton(
+                  onPressed: isMonitoring ? stopMonitoring : null,
+                  child: Text(stopButtonText),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(response ?? '请输入API Endpoint和目标App名称'),
+            const SizedBox(height: 24),
+            Text(
+              response ?? '等待短信中...',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
           ],
         ),
       ),
