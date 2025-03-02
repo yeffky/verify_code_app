@@ -33,7 +33,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final _apiEndpointController = TextEditingController(
-    text: 'http://47.122.42.169:5628/captcha',
+    text: 'http://xx.xx.xx.xx:5628/captcha',
   );
   final _targetAppController = TextEditingController(text: '小红书');
   final _phoneNumberController = TextEditingController(text: '1234567890');
