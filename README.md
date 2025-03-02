@@ -1,16 +1,17 @@
 # verify_code_app_new
 
-A new Flutter project.
+一款监控短信获取验证码进行转发的flutter项目。（monitor phone and send code to the specific api）
 
-## Getting Started
+## Usage
 
-This project is a starting point for a Flutter application.
+1. Add the dependency.
 
-A few resources to get you started if this is your first Flutter project:
+```shell
+flutter pub get
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+2. run app
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```shell
+flutter run
+```

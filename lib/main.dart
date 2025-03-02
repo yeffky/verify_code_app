@@ -33,7 +33,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final _apiEndpointController = TextEditingController(
-    text: 'http://xx.xx.xx.xx:5628/captcha',
+    text: 'http://47.122.42.169:5628/captcha',
   );
   final _targetAppController = TextEditingController(text: '小红书');
   final _phoneNumberController = TextEditingController(text: '1234567890');
@@ -189,6 +189,20 @@ class _MyHomePageState extends State<MyHomePage> {
                 hintText: 'Enter your API endpoint URL',
               ),
               onChanged: (value) {
+                // 当用户输入内容时，更新 _apiEndpointController 的值
+                setState(() {
+                  _apiEndpointController.text = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _phoneNumberController,
+              decoration: const InputDecoration(
+                labelText: 'Phone Number[condition 1]',
+                hintText: 'Enter your phone number',
+              ),
+              onChanged: (value) {
                 // 当用户输入内容时，更新 _phoneNumberController 的值
                 setState(() {
                   _phoneNumberController.text = value;
@@ -199,7 +213,7 @@ class _MyHomePageState extends State<MyHomePage> {
             TextField(
               controller: _targetAppController,
               decoration: const InputDecoration(
-                labelText: 'Target App',
+                labelText: 'Target App[condition 2]',
                 hintText: 'Enter the app name to monitor',
               ),
               onChanged: (value) {

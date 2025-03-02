@@ -1,7 +1,7 @@
 /*
  * @Author: yeffky
  * @Date: 2025-02-21 16:07:31
- * @LastEditTime: 2025-03-01 17:34:48
+ * @LastEditTime: 2025-03-02 10:30:02
  */
 import 'package:http/http.dart' as http;
 import 'package:sms_advanced/contact.dart';
@@ -18,7 +18,23 @@ class SMSHandler {
   Future<String?> initSMSListener() async {
     print(_phoneNumber);
     SmsQuery query = SmsQuery();
-    List<SmsMessage>? messages = await query.querySms(address: _phoneNumber, kinds: [SmsQueryKind.Inbox]); // 获取收件箱中的短信
+    List<SmsMessage>? messages = await query.querySms(
+      address: _phoneNumber,
+      kinds: [SmsQueryKind.Inbox],
+    ); // 获取收件箱中的短信
+    if (messages == null || messages.isEmpty) {
+      List<SmsMessage>? messages = await query.querySms(
+        kinds: [SmsQueryKind.Inbox],
+      ); // 根据条件二进行查询
+      for (SmsMessage message in messages) {
+        if (message.body?.contains(_targetApp) ?? false) {
+          final code = _extractCode(message.body);
+          if (code != null) {
+            return await _sendCodeToAPI(code);
+          }
+        }
+      }
+    }
     String? result;
     if (messages.isNotEmpty) {
       // 获取第一条短信
@@ -44,15 +60,6 @@ class SMSHandler {
     }
     return null;
   }
-
-  // Future<void> _handleSMS(SmsMessage sms) async {
-  //   if (sms.body?.contains(_targetApp) ?? false) {
-  //     final code = _extractCode(sms.body);
-  //     if (code != null) {
-  //       await _sendCodeToAPI(code);
-  //     }
-  //   }
-  // }
 
   String? _extractCode(String? message) {
     if (message == null) return null;
