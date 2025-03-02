@@ -33,7 +33,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final _apiEndpointController = TextEditingController(
-    text: 'http://xxx.xxx.xxx.xxx:5628/captcha',
+    text: 'http://xx.xx.xx.xx:5628/captcha',
   );
   final _targetAppController = TextEditingController(text: '小红书');
   final _phoneNumberController = TextEditingController(text: '1234567890');
@@ -53,11 +53,23 @@ class _MyHomePageState extends State<MyHomePage> {
     _initReceivePort();
   }
 
+  // 在主isolate的接收端口监听中添加状态更新
   void _initReceivePort() {
     _receivePort = ReceivePort();
     _receivePort.listen((message) {
       if (message is String) {
-        setState(() => response = message);
+        if (message == 'isolate_stopped') {
+          // 处理isolate退出通知
+          if (mounted) {
+            setState(() {
+              _isolate = null;
+              isMonitoring = false;
+              buttonText = '开始监控';
+            });
+          }
+        } else {
+          setState(() => response = message);
+        }
       } else if (message is SendPort) {
         _isolateSendPort = message;
       }
@@ -71,17 +83,16 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
+  // 修改 _stopIsolate 方法，仅发送停止信号，不强制终止Isolate
   void _stopIsolate() {
     if (_isolate != null) {
       _isolateSendPort?.send('stop');
-      _isolate?.kill(priority: Isolate.immediate);
-      _isolate = null;
     }
   }
 
   Future<void> _checkPermissions() async {
-    final status = await Permission.sms.request();
-    if (!status.isGranted) {
+    final status_sms = await Permission.sms.request();
+    if (!status_sms.isGranted) {
       throw Exception('SMS permission denied');
     }
   }
@@ -98,25 +109,23 @@ class _MyHomePageState extends State<MyHomePage> {
         isMonitoring = true;
       });
 
-      _isolate = await Isolate.spawn(
-        _monitorSmsInBackground,
-        [
-          _apiEndpointController.text,
-          _targetAppController.text,
-          _phoneNumberController.text,
-          _receivePort.sendPort,
-          _rootIsolateToken,
-        ],
-      );
+      _isolate = await Isolate.spawn(_monitorSmsInBackground, [
+        _apiEndpointController.text,
+        _targetAppController.text,
+        _phoneNumberController.text,
+        _receivePort.sendPort,
+        _rootIsolateToken,
+      ]);
     } catch (e) {
       setState(() => response = 'Error: ${e.toString()}');
       _handleMonitoringStop();
     }
   }
 
+  // 修改停止监控方法
   void stopMonitoring() {
     _stopIsolate();
-    _handleMonitoringStop();
+    // 移除 _handleMonitoringStop，改由isolate退出通知触发状态更新
   }
 
   void _handleMonitoringStop() {
@@ -138,7 +147,6 @@ class _MyHomePageState extends State<MyHomePage> {
     final phoneNumber = args[2] as String;
     final mainSendPort = args[3] as SendPort;
     final smsHandler = SMSHandler(apiEndpoint, targetApp, phoneNumber);
-
     final controlPort = ReceivePort();
     mainSendPort.send(controlPort.sendPort);
 
@@ -155,15 +163,14 @@ class _MyHomePageState extends State<MyHomePage> {
           const Duration(seconds: 1),
           onTimeout: () => null,
         );
-
-        if (value != null) {
-          mainSendPort.send(value);
-        }
+        print(value);
+        mainSendPort.send(value);
 
         if (stopCompleter.isCompleted) break;
       }
     } finally {
       controlPort.close();
+      mainSendPort.send('isolate_stopped'); // 添加退出通知
     }
   }
 
@@ -181,14 +188,12 @@ class _MyHomePageState extends State<MyHomePage> {
                 labelText: 'API Endpoint',
                 hintText: 'Enter your API endpoint URL',
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _phoneNumberController,
-              decoration: const InputDecoration(
-                labelText: 'Phone Number',
-                hintText: 'Enter your phone number',
-              ),
+              onChanged: (value) {
+                // 当用户输入内容时，更新 _phoneNumberController 的值
+                setState(() {
+                  _phoneNumberController.text = value;
+                });
+              },
             ),
             const SizedBox(height: 16),
             TextField(
@@ -197,6 +202,12 @@ class _MyHomePageState extends State<MyHomePage> {
                 labelText: 'Target App',
                 hintText: 'Enter the app name to monitor',
               ),
+              onChanged: (value) {
+                // 当用户输入内容时，更新 _targetAppController 的值
+                setState(() {
+                  _targetAppController.text = value;
+                });
+              },
             ),
             const SizedBox(height: 24),
             Row(

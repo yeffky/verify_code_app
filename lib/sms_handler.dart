@@ -1,9 +1,10 @@
 /*
  * @Author: yeffky
  * @Date: 2025-02-21 16:07:31
- * @LastEditTime: 2025-02-26 16:59:17
+ * @LastEditTime: 2025-03-01 17:34:48
  */
 import 'package:http/http.dart' as http;
+import 'package:sms_advanced/contact.dart';
 import 'dart:convert';
 import 'package:sms_advanced/sms_advanced.dart';
 
@@ -15,12 +16,11 @@ class SMSHandler {
   SMSHandler(this._apiEndpoint, this._targetApp, this._phoneNumber);
 
   Future<String?> initSMSListener() async {
-    SmsQuery query =
-        SmsQuery()
-          ..querySms(address: _phoneNumber, kinds: [SmsQueryKind.Inbox]);
-    List<SmsMessage>? messages = await query.querySms();
+    print(_phoneNumber);
+    SmsQuery query = SmsQuery();
+    List<SmsMessage>? messages = await query.querySms(address: _phoneNumber, kinds: [SmsQueryKind.Inbox]); // 获取收件箱中的短信
     String? result;
-    if (messages != null && messages.isNotEmpty) {
+    if (messages.isNotEmpty) {
       // 获取第一条短信
       SmsMessage firstMessage = messages.first;
       String? messageBody = firstMessage.body;
@@ -34,10 +34,10 @@ class SMSHandler {
         // 发送验证码到 API
         result = await _sendCodeToAPI(smsCode);
       } else {
-        print('未在短信中找到验证码');
+        result = '未在短信中找到验证码';
       }
     } else {
-      print('未找到短信');
+      result = '未找到短信';
     }
     if (result != null) {
       return result;
@@ -71,11 +71,10 @@ class SMSHandler {
       if (response.statusCode != 200) {
         return ('Failed to send code: ${response.statusCode}');
       } else {
-        return 'Code sent successfully';
+        return 'Successfully Code sent ';
       }
     } catch (e) {
       return ('Error sending code: $e');
     }
   }
-  
 }
