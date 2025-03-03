@@ -1,7 +1,7 @@
 /*
  * @Author: yeffky
  * @Date: 2025-02-21 16:07:31
- * @LastEditTime: 2025-03-02 10:30:02
+ * @LastEditTime: 2025-03-03 12:39:28
  */
 import 'package:http/http.dart' as http;
 import 'package:sms_advanced/contact.dart';
@@ -22,7 +22,7 @@ class SMSHandler {
       address: _phoneNumber,
       kinds: [SmsQueryKind.Inbox],
     ); // 获取收件箱中的短信
-    if (messages == null || messages.isEmpty) {
+    if (messages.isEmpty) {
       List<SmsMessage>? messages = await query.querySms(
         kinds: [SmsQueryKind.Inbox],
       ); // 根据条件二进行查询
@@ -78,7 +78,7 @@ class SMSHandler {
       if (response.statusCode != 200) {
         return ('Failed to send code: ${response.statusCode}');
       } else {
-        return 'Successfully Code sent ';
+        return 'Successfully Code sent';
       }
     } catch (e) {
       return ('Error sending code: $e');

@@ -69,6 +69,9 @@ class _MyHomePageState extends State<MyHomePage> {
           }
         } else {
           setState(() => response = message);
+          if(message == 'Successfully Code sent') {
+            _stopIsolate();
+          }
         }
       } else if (message is SendPort) {
         _isolateSendPort = message;
